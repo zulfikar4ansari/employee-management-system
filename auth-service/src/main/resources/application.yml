@@ -1,0 +1,32 @@
+server:
+  port: 8081        # Auth-Service runs on port 8081
+
+spring:
+  application:
+    name: auth-service
+
+  redis:
+    host: localhost # Redis host (change if using Docker / cloud)
+    port: 6379
+    database: 0
+    timeout: 2000ms
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# JWT configuration
+security:
+  jwt:
+    secret: ems-secret-key     # Replace with secure key in production
+    access-token-expiry-seconds: 3600
+    refresh-token-expiry-seconds: 86400
+
+# OTP configuration
+otp:
+  expiry-minutes: 5
+
+logging:
+  level:
+    root: INFO
+    com.ems.auth: DEBUG
