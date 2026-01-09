@@ -6,7 +6,7 @@ spring:
     name: auth-service
 
   redis:
-    host: localhost # Redis host (change if using Docker / cloud)
+    host: redis # Redis host (change if using Docker / cloud)
     port: 6379
     database: 0
     timeout: 2000ms

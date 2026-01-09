@@ -1,0 +1,387 @@
+application.yml
+server:
+  port: 8081        # Auth-Service runs on port 8081
+
+spring:
+  application:
+    name: auth-service
+
+  redis:
+    host: redis # Redis host (change if using Docker / cloud)
+    port: 6379
+    database: 0
+    timeout: 2000ms
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# JWT configuration
+security:
+  jwt:
+    secret: ems-secret-key     # Replace with secure key in production
+    access-token-expiry-seconds: 3600
+    refresh-token-expiry-seconds: 86400
+
+# OTP configuration
+otp:
+  expiry-minutes: 5
+
+logging:
+  level:
+    root: INFO
+    com.ems.auth: DEBUG
+
+-------------------------------------------------------------------------------------------------
+
+package com.auth;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+
+/**
+ * Entry point for Auth-Service.
+ * Runs as a standalone Spring Boot microservice.
+ */
+
+@SpringBootApplication
+public class AuthServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(AuthServiceApplication.class, args);
+	}
+
+}
+
+-------------------------------------------------------------------------------------------------
+package com.auth.audit;
+
+import org.springframework.stereotype.Component;
+
+/**
+ * Placeholder for audit logging.
+ * Later this will publish to Audit Service.
+ */
+@Component
+public class AuditPublisher
+{
+    public void log(String event) {
+        System.out.println("AUDIT LOG :: " + event);
+    }
+}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+/**
+ * Configures Redis connection + template.
+ * Redis is used for: OTP Storage, Login Session Storage, Token Revocation (future support)
+ */
+
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        return new LettuceConnectionFactory("localhost", 6379);
+    }
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(
+            LettuceConnectionFactory factory) {
+        return new StringRedisTemplate(factory);
+    }
+}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.controller;
+
+import com.auth.model.AuthResponse;
+import com.auth.model.OtpRequest;
+import com.auth.model.OtpVerifyRequest;
+import com.auth.service.AuthSessionService;
+import com.auth.service.JwtTokenService;
+import com.auth.service.OtpService;
+import com.ems.common.dto.ApiResponse;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Exposes OTP and authentication APIs.
+ */
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    private final OtpService otpService;
+    private final JwtTokenService jwtTokenService;
+    private final AuthSessionService sessionService;
+
+    public AuthController(
+            OtpService otpService,
+            JwtTokenService jwtTokenService,
+            AuthSessionService sessionService) {
+        this.otpService = otpService;
+        this.jwtTokenService = jwtTokenService;
+        this.sessionService = sessionService;
+    }
+
+    /**
+     * STEP-1: Generate OTP
+     */
+    @PostMapping("/send-otp")
+    public ApiResponse<String> sendOtp(@RequestBody OtpRequest req) {
+
+        otpService.generateOtp(req.mobile());
+        return ApiResponse.ok("OTP sent to WhatsApp");
+    }
+
+    /**
+     * STEP-2: Verify OTP → Issue JWT → Store Session
+     */
+    @PostMapping("/verify-otp")
+    public ApiResponse<AuthResponse> verifyOtp(@RequestBody OtpVerifyRequest req) {
+
+        if (!otpService.validateOtp(req.mobile(), req.otp())) {
+            throw new RuntimeException("Invalid OTP");
+        }
+
+        Long employeeId = 1001L; // Will be DB-driven later
+
+        String accessToken =
+                jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+
+        String refreshToken =
+                jwtTokenService.generateRefreshToken();
+
+        // Store login session in Redis
+        sessionService.storeSession(
+                jwtTokenService.createSession(req.mobile(), employeeId)
+        );
+
+        return ApiResponse.ok(
+                new AuthResponse(accessToken, refreshToken),
+                "Login successful"
+        );
+    }
+}
+
+-------------------------------------------------------------------------------------------------
+package com.auth.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.Map;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<?> handle(Exception ex) {
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", ex.getMessage()));
+    }
+}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.model;
+
+/**
+ * Response returned after successful authentication.
+ */
+public record AuthResponse(
+        String accessToken,
+        String refreshToken
+) {}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.model;
+
+/**
+ * Request payload when employee enters mobile number.
+ */
+public record OtpRequest(String mobile) {}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.model;
+
+/**
+ * Request payload for OTP verification.
+ */
+public record OtpVerifyRequest(
+        String mobile,
+        String otp
+) {}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.service;
+
+import com.ems.common.constants.RedisKeys;
+import com.ems.common.jwt.UserSession;
+import com.ems.common.util.JsonUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+/**
+ * Stores logged-in user session in Redis.
+ */
+@Service
+public class AuthSessionService {
+
+    private final StringRedisTemplate redis;
+
+    public AuthSessionService(StringRedisTemplate redis) {
+        this.redis = redis;
+    }
+
+    public void storeSession(UserSession session) {
+
+        String key = RedisKeys.SESSION + session.mobile();
+
+        redis.opsForValue().set(
+                key,
+                JsonUtils.toJson(session)
+        );
+    }
+}
+
+
+-------------------------------------------------------------------------------------------------
+package com.auth.service;
+
+import com.ems.common.jwt.UserSession;
+import io.jsonwebtoken.Jwts;
+import org.springframework.stereotype.Service;
+
+
+import java.time.OffsetDateTime;
+import java.util.Date;
+import java.util.UUID;
+
+
+import io.jsonwebtoken.security.Keys;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Handles JWT access token and refresh token generation.
+ * Uses proper HMAC key handling as required by JJWT 0.11+.
+ */
+@Service
+public class JwtTokenService {
+
+    /**
+     * HS256 requires a minimum 256-bit (32-byte) secret.
+     * NEVER use short strings in production.
+     */
+    private static final String SECRET =
+            "ems-secret-key-ems-secret-key-ems-secret-key";
+
+    /**
+     * Convert the secret into a cryptographically valid HMAC key.
+     */
+    private final SecretKey signingKey =
+            Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+
+    /**
+     * Generates JWT access token.
+     */
+    public String generateAccessToken(String mobile, Long employeeId) {
+
+        return Jwts.builder()
+                .setSubject(mobile)                 // Principal
+                .claim("employeeId", employeeId)    // Custom claim
+                .setIssuedAt(new Date())             // Issued time
+                .setExpiration(
+                        new Date(System.currentTimeMillis() + 3600_000)
+                )                                    // 1 hour expiry
+                .signWith(signingKey)                // ✅ CORRECT
+                .compact();
+    }
+
+    /**
+     * Generates refresh token (UUID-based).
+     */
+    public String generateRefreshToken() {
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Creates a session object to store in Redis.
+     */
+    public UserSession createSession(String mobile, Long employeeId) {
+        return new UserSession(
+                mobile,
+                employeeId,
+                OffsetDateTime.now()
+        );
+    }
+}
+
+-------------------------------------------------------------------------------------------------
+package com.auth.service;
+
+import com.ems.common.constants.RedisKeys;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Generates OTP and stores it temporarily in Redis.
+ */
+@Service
+public class OtpService {
+
+    private final StringRedisTemplate redis;
+
+    public OtpService(StringRedisTemplate redis) {
+        this.redis = redis;
+    }
+
+    public String generateOtp(String mobile) {
+
+        // Generate 6-digit OTP
+        String otp = String.valueOf((int)(Math.random() * 900000) + 100000);
+
+        // Store in Redis — expires in 5 mins
+        redis.opsForValue().set(
+                RedisKeys.OTP + mobile,
+                otp,
+                5,
+                TimeUnit.MINUTES
+        );
+
+        // In real system → send via WhatsApp API
+        System.out.println("OTP sent to WhatsApp = " + otp);
+
+        return otp;
+    }
+
+    public boolean validateOtp(String mobile, String input) {
+
+        String stored = redis.opsForValue().get(RedisKeys.OTP + mobile);
+
+        return stored != null && stored.equals(input);
+    }
+}
+
+
+-------------------------------------------------------------------------------------------------
+

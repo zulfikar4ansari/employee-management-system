@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Entry point for Auth-Service.
  * Runs as a standalone Spring Boot microservice.
  */
+
 @SpringBootApplication
 public class AuthServiceApplication {
 

@@ -10,7 +10,7 @@ import com.ems.common.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Exposes OTP + Authentication APIs.
+ * Exposes OTP and authentication APIs.
  */
 @RestController
 @RequestMapping("/auth")
@@ -30,18 +30,17 @@ public class AuthController {
     }
 
     /**
-     * STEP-1 — Generate OTP
+     * STEP-1: Generate OTP
      */
     @PostMapping("/send-otp")
     public ApiResponse<String> sendOtp(@RequestBody OtpRequest req) {
 
         otpService.generateOtp(req.mobile());
-
         return ApiResponse.ok("OTP sent to WhatsApp");
     }
 
     /**
-     * STEP-2 — Verify OTP → Create Session → Issue Tokens
+     * STEP-2: Verify OTP → Issue JWT → Store Session
      */
     @PostMapping("/verify-otp")
     public ApiResponse<AuthResponse> verifyOtp(@RequestBody OtpVerifyRequest req) {
@@ -50,19 +49,22 @@ public class AuthController {
             throw new RuntimeException("Invalid OTP");
         }
 
-        Long employeeId = 1001L; // Later handled via DB
+        Long employeeId = 1001L; // Will be DB-driven later
 
-        // Create JWT
-        String access = jwtTokenService.generateAccessToken(req.mobile(), employeeId);
-        String refresh = jwtTokenService.generateRefreshToken();
+        String accessToken =
+                jwtTokenService.generateAccessToken(req.mobile(), employeeId);
 
-        // Store session in Redis
+        String refreshToken =
+                jwtTokenService.generateRefreshToken();
+
+        // Store login session in Redis
         sessionService.storeSession(
                 jwtTokenService.createSession(req.mobile(), employeeId)
         );
 
-        AuthResponse response = new AuthResponse(access, refresh);
-
-        return ApiResponse.ok(response, "Login successful");
+        return ApiResponse.ok(
+                new AuthResponse(accessToken, refreshToken),
+                "Login successful"
+        );
     }
 }

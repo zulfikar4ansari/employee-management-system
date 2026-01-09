@@ -16,11 +16,12 @@ public class RedisConfig {
 
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        return new LettuceConnectionFactory();
+        return new LettuceConnectionFactory("localhost", 6379);
     }
 
     @Bean
-    public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory connection) {
-        return new StringRedisTemplate(connection);
+    public StringRedisTemplate stringRedisTemplate(
+            LettuceConnectionFactory factory) {
+        return new StringRedisTemplate(factory);
     }
 }

@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
  * Later this will publish to Audit Service.
  */
 @Component
-public class AuditPublisher {
-
+public class AuditPublisher
+{
     public void log(String event) {
         System.out.println("AUDIT LOG :: " + event);
     }
