@@ -1,4 +1,4 @@
-package com.ems.common.events;
+package com.common_lib.events;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;

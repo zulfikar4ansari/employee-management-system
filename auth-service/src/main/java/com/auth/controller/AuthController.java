@@ -6,7 +6,7 @@ import com.auth.model.OtpVerifyRequest;
 import com.auth.service.AuthSessionService;
 import com.auth.service.JwtTokenService;
 import com.auth.service.OtpService;
-import com.ems.common.dto.ApiResponse;
+import com.common_lib.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
 /**

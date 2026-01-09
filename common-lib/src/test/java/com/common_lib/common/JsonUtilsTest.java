@@ -1,7 +1,7 @@
-package com.ems.common;
+package com.common_lib.common;
 
-import com.ems.common.events.AttendanceEvent;
-import com.ems.common.util.JsonUtils;
+import com.common_lib.events.AttendanceEvent;
+import com.common_lib.utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

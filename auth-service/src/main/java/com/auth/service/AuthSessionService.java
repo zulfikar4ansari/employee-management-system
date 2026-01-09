@@ -1,8 +1,9 @@
 package com.auth.service;
 
-import com.ems.common.constants.RedisKeys;
-import com.ems.common.jwt.UserSession;
-import com.ems.common.util.JsonUtils;
+import com.common_lib.constants.RedisKeys;
+import com.common_lib.jwt.UserSession;
+import com.common_lib.utils.JsonUtils;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 

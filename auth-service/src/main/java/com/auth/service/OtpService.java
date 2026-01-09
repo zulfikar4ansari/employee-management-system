@@ -1,6 +1,7 @@
 package com.auth.service;
 
-import com.ems.common.constants.RedisKeys;
+import com.common_lib.constants.RedisKeys;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 

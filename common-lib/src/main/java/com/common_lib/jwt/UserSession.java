@@ -1,4 +1,4 @@
-package com.ems.common.jwt;
+package com.common_lib.jwt;
 
 import java.time.OffsetDateTime;
 

@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<!-- Inherit dependency versions and plugins from root project -->
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<!-- Module coordinates -->
+	<artifactId>common-lib</artifactId>
+	<name>common-lib</name>
+	<version>0.0.1-SNAPSHOT</version>
+	<description>Shared library for EMS microservices</description>
+	<packaging>jar</packaging>
+
+	<properties>
+		<java.version>17</java.version>
+		<lombok.version>1.18.32</lombok.version>
+	</properties>
+
+	<dependencies>
+
+		<!-- Jackson — Core JSON support -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+
+		<!-- Java Time (LocalDate, OffsetDateTime, etc.) -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
+
+		<!-- Lombok (compile-time only, not packaged) -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<version>${lombok.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- Kafka contracts shared across services -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
+		<!-- JUnit 5 -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<!-- Prevent Spring Boot plugin from running in this module -->
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>repackage</id>
+						<phase>none</phase>
+					</execution>
+				</executions>
+			</plugin>
+
+		</plugins>
+	</build>
+
+</project>
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.constants;
+
+/**
+ * Centralized Redis key naming conventions.
+ * Ensures all services use consistent cache + session keys.
+ */
+public final class RedisKeys {
+
+    // Prevent instantiation
+    private RedisKeys() {}
+
+    /** OTP:<mobile> */
+    public static final String OTP = "OTP:";
+
+    /** SESSION:<mobile> */
+    public static final String SESSION = "SESSION:";
+
+    /** EMP:<employeeId> */
+    public static final String EMPLOYEE_CACHE = "EMP:";
+
+    /** ATT:<yyyyMMdd>:<employeeId> */
+    public static final String ATTENDANCE = "ATT:";
+}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.dto;
+
+/**
+ * Standardized success response wrapper
+ * used across all microservices.
+ */
+public record ApiResponse<T>(
+
+        boolean success,
+        T data,
+        String message
+) {
+
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(true, data, null);
+    }
+
+    public static <T> ApiResponse<T> ok(T data, String message) {
+        return new ApiResponse<>(true, data, message);
+    }
+}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.dto;
+
+import java.time.OffsetDateTime;
+
+/**
+ * Standardized API error contract.
+ */
+public record ErrorResponse(
+
+        String code,
+        String message,
+        OffsetDateTime timestamp
+) {}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.events;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+
+/**
+ * Kafka event emitted by Attendance Service
+ * and consumed by Payroll Service.
+ *
+ * Implemented as Java Record → immutable & thread-safe.
+ */
+public record AttendanceEvent(
+
+        Long employeeId,          // employee identifier
+        String eventType,         // IN / OUT
+        LocalDate attendanceDay,  // business day
+        OffsetDateTime timestamp, // event time
+        Double workedHours        // only for OUT events
+) {}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.exceptions;
+
+/**
+ * Used for domain validation failures
+ * to ensure consistent error mapping.
+ */
+public class BusinessException extends RuntimeException {
+
+    private final String code;
+
+    public BusinessException(String code, String message) {
+        super(message);
+        this.code = code;
+    }
+
+    public String getCode() {
+        return code;
+    }
+}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.jwt;
+
+import java.time.OffsetDateTime;
+
+/**
+ * Represents authenticated user session data stored in Redis
+ * and embedded inside JWT claims.
+ */
+public record UserSession(
+
+        String mobile,
+        Long employeeId,
+        OffsetDateTime issuedAt
+) {}
+
+-------------------------------------------------------------------------------------------------
+package com.common_lib.utils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+/**
+ * Shared JSON serializer / deserializer
+ * reused across microservices.
+ */
+public final class JsonUtils {
+
+    private static final ObjectMapper MAPPER =
+            new ObjectMapper().registerModule(new JavaTimeModule());
+
+    private JsonUtils() {}
+
+    public static String toJson(Object value) {
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new RuntimeException("JSON serialization failed", ex);
+        }
+    }
+
+    public static <T> T fromJson(String json, Class<T> type) {
+        try {
+            return MAPPER.readValue(json, type);
+        } catch (Exception ex) {
+            throw new RuntimeException("JSON deserialization failed", ex);
+        }
+    }
+
+    public static ObjectMapper mapper() {
+        return MAPPER;
+    }
+}
+
+-------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------------------------

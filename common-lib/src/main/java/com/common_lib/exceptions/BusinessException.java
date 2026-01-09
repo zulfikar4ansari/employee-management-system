@@ -1,4 +1,4 @@
-package com.ems.common.exceptions;
+package com.common_lib.exceptions;
 
 /**
  * Used for domain validation failures

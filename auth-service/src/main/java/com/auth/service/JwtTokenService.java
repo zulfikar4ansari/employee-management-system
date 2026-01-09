@@ -1,6 +1,6 @@
 package com.auth.service;
 
-import com.ems.common.jwt.UserSession;
+import com.common_lib.jwt.UserSession;
 import io.jsonwebtoken.Jwts;
 import org.springframework.stereotype.Service;
 

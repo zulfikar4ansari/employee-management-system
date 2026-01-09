@@ -1,4 +1,4 @@
-package com.ems.common.constants;
+package com.common_lib.constants;
 
 /**
  * Centralized Redis key naming conventions.

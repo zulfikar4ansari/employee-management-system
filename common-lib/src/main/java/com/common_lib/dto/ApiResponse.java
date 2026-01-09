@@ -1,4 +1,4 @@
-package com.ems.common.dto;
+package com.common_lib.dto;
 
 /**
  * Standardized success response wrapper

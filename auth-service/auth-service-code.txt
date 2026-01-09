@@ -1,4 +1,97 @@
-application.yml
+------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>auth-service</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>auth-service</name>
+	<description>Auth Service using Spring Boot</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+		<!-- Spring Web -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- Redis Session Store -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!-- JJWT API -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>0.11.5</version>
+		</dependency>
+
+		<!-- JJWT implementation (runtime) -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>0.11.5</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- JJWT Jackson support (runtime) -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>0.11.5</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Spring Boot Test + JUnit 5 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Shared library -->
+		<dependency>
+			<groupId>com.ems</groupId>
+			<artifactId>common-lib</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+------------------------------------------------------------------------------------------
 server:
   port: 8081        # Auth-Service runs on port 8081
 
@@ -32,29 +125,9 @@ logging:
     root: INFO
     com.ems.auth: DEBUG
 
--------------------------------------------------------------------------------------------------
-
-package com.auth;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 
-/**
- * Entry point for Auth-Service.
- * Runs as a standalone Spring Boot microservice.
- */
-
-@SpringBootApplication
-public class AuthServiceApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(AuthServiceApplication.class, args);
-	}
-
-}
-
--------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
 package com.auth.audit;
 
 import org.springframework.stereotype.Component;
@@ -72,7 +145,9 @@ public class AuditPublisher
 }
 
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
 package com.auth.config;
 
 import org.springframework.context.annotation.Bean;
@@ -102,7 +177,10 @@ public class RedisConfig {
 }
 
 
--------------------------------------------------------------------------------------------------
+
+
+
+------------------------------------------------------------------------------------------
 package com.auth.controller;
 
 import com.auth.model.AuthResponse;
@@ -111,7 +189,7 @@ import com.auth.model.OtpVerifyRequest;
 import com.auth.service.AuthSessionService;
 import com.auth.service.JwtTokenService;
 import com.auth.service.OtpService;
-import com.ems.common.dto.ApiResponse;
+import com.common_lib.dto.ApiResponse;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -174,7 +252,10 @@ public class AuthController {
     }
 }
 
--------------------------------------------------------------------------------------------------
+
+
+
+------------------------------------------------------------------------------------------
 package com.auth.exception;
 
 import org.springframework.http.HttpStatus;
@@ -196,7 +277,10 @@ public class GlobalExceptionHandler {
 }
 
 
--------------------------------------------------------------------------------------------------
+
+
+
+------------------------------------------------------------------------------------------
 package com.auth.model;
 
 /**
@@ -208,7 +292,9 @@ public record AuthResponse(
 ) {}
 
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
 package com.auth.model;
 
 /**
@@ -217,7 +303,9 @@ package com.auth.model;
 public record OtpRequest(String mobile) {}
 
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
 package com.auth.model;
 
 /**
@@ -229,12 +317,15 @@ public record OtpVerifyRequest(
 ) {}
 
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
 package com.auth.service;
 
-import com.ems.common.constants.RedisKeys;
-import com.ems.common.jwt.UserSession;
-import com.ems.common.util.JsonUtils;
+import com.common_lib.constants.RedisKeys;
+import com.common_lib.jwt.UserSession;
+import com.common_lib.utils.JsonUtils;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -262,10 +353,12 @@ public class AuthSessionService {
 }
 
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
 package com.auth.service;
 
-import com.ems.common.jwt.UserSession;
+import com.common_lib.jwt.UserSession;
 import io.jsonwebtoken.Jwts;
 import org.springframework.stereotype.Service;
 
@@ -334,10 +427,14 @@ public class JwtTokenService {
     }
 }
 
--------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
+
 package com.auth.service;
 
-import com.ems.common.constants.RedisKeys;
+import com.common_lib.constants.RedisKeys;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -383,5 +480,51 @@ public class OtpService {
 }
 
 
--------------------------------------------------------------------------------------------------
 
+------------------------------------------------------------------------------------------
+
+package com.auth;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+
+/**
+ * Entry point for Auth-Service.
+ * Runs as a standalone Spring Boot microservice.
+ */
+
+@SpringBootApplication
+public class AuthServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(AuthServiceApplication.class, args);
+	}
+
+}
+
+
+
+------------------------------------------------------------------------------------------
+
+
+
+
+------------------------------------------------------------------------------------------
+
+
+
+
+
+------------------------------------------------------------------------------------------
+
+
+
+
+------------------------------------------------------------------------------------------
+
+
+
+
+
+------------------------------------------------------------------------------------------
