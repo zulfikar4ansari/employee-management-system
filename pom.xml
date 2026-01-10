@@ -46,11 +46,11 @@
 		<module>common-lib</module>
 		<module>auth-service</module>
 		<module>api-gateway</module>
-	<!--<module>employee-service</module>
-		<module>attendance-service</module>
-		<module>payroll-service</module>
-		<module>audit-service</module>
-		<module>web-portal</module>-->
+	    <module>employee-service</module>
+	<!--<module>attendance-service</module>
+            <module>payroll-service</module>
+            <module>audit-service</module>
+            <module>web-portal</module>-->
 	</modules>
 
 </project>
