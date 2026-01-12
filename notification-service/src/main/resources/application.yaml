@@ -1,0 +1,36 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: notification-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+      group-id: notification-service-group-v2
+      auto-offset-reset: earliest
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+
+      properties:
+        # delegate actual value deserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+
+        # allow deserialization from all packages
+        spring.json.trusted.packages: "*"
+
+        # IMPORTANT: ignore producer __TypeId__ headers
+        spring.json.use.type.headers: false
+
+        # force payload type to common-lib event class
+        spring.json.value.default.type: com.common_lib.events.AttendanceNotificationEvent
+
+notification:
+  topic: attendance.notification
+
+  channels:
+    whatsapp: true
+    sms: false

@@ -1,5 +1,6 @@
 package com.attendance_service.kafka;
 
+import com.common_lib.events.AttendanceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;

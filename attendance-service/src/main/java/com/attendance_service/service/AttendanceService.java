@@ -2,10 +2,10 @@ package com.attendance_service.service;
 
 import com.attendance_service.dto.AttendanceResponse;
 import com.attendance_service.entity.AttendanceEntity;
-import com.attendance_service.kafka.AttendanceNotificationEvent;
 import com.attendance_service.kafka.KafkaPublisher;
 import com.attendance_service.repository.AttendanceRepository;
 
+import com.common_lib.events.AttendanceNotificationEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
