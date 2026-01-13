@@ -24,10 +24,10 @@ public class AttendanceEntity {
     @Column(name="attendance_time", nullable=false)
     private LocalTime attendanceTime;
 
-    @Column(name="qr_date", nullable=false)
+    @Column(name="qr_date", nullable=true)
     private LocalDate qrDate;
 
-    @Column(name="qr_code_value", nullable=false, length=16)
+    @Column(name="qr_code_value", nullable=true, length=16)
     private String qrCodeValue;
 
     @Column(name="status", nullable=false)
@@ -35,6 +35,39 @@ public class AttendanceEntity {
 
     @Column(name="reason")
     private String reason;
+
+    @Column(name = "time_in")
+    private LocalTime timeIn;
+
+    @Column(name = "time_out")
+    private LocalTime timeOut;
+
+    @Column(name = "worked_minutes")
+    private Integer workedMinutes;
+
+    public LocalTime getTimeIn() {
+        return timeIn;
+    }
+
+    public void setTimeIn(LocalTime timeIn) {
+        this.timeIn = timeIn;
+    }
+
+    public LocalTime getTimeOut() {
+        return timeOut;
+    }
+
+    public void setTimeOut(LocalTime timeOut) {
+        this.timeOut = timeOut;
+    }
+
+    public Integer getWorkedMinutes() {
+        return workedMinutes;
+    }
+
+    public void setWorkedMinutes(Integer workedMinutes) {
+        this.workedMinutes = workedMinutes;
+    }
 
     public Long getId() { return id; }
     public Long getEmployeeId() { return employeeId; }
