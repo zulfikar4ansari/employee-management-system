@@ -9,7 +9,6 @@ import com.employee_service.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -67,4 +66,11 @@ public class EmployeeProfileService {
 
         return response;
     }
+
+    public EmployeeEntity findByMobile(String mobile) {
+        return repository.findByMobile(mobile)
+                .orElseThrow(() -> new RuntimeException("Employee not found for mobile: " + mobile));
+    }
+
+
 }

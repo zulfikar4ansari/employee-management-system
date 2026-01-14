@@ -2,7 +2,9 @@ package com.employee_service.controller;
 
 
 import com.common_lib.dto.ApiResponse;
+import com.employee_service.dto.EmployeeMobileLookupResponse;
 import com.employee_service.dto.EmployeeProfileResponse;
+import com.employee_service.entity.EmployeeEntity;
 import com.employee_service.service.EmployeeProfileService;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,5 +32,15 @@ public class EmployeeController {
         EmployeeProfileResponse profile = service.getEmployeeProfileById(employeeId);
 
         return ApiResponse.ok(profile, "Employee profile fetched");
+    }
+
+    @GetMapping("/by-mobile/{mobile}")
+    public ApiResponse<EmployeeMobileLookupResponse> getEmployeeByMobile(@PathVariable String mobile) {
+
+        var emp = service.findByMobile(mobile);
+
+        var resp = new EmployeeMobileLookupResponse(emp.getEmployeeId(), emp.getMobile());
+
+        return ApiResponse.ok(resp, "Employee found");
     }
 }

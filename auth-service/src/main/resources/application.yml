@@ -30,3 +30,6 @@ logging:
   level:
     root: INFO
     com.ems.auth: DEBUG
+
+employee-service:
+  base-url: http://localhost:8082

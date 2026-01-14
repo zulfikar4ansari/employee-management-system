@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS employees (
 );
 
 INSERT INTO employees(employee_id, mobile, department, role, shift, payroll_mapping_id)
-VALUES (1001, '9876543210', 'IT', 'Senior Developer', 'GENERAL', 9001)
+VALUES (1003, '9876543213', 'IT', 'Senior Developer', 'GENERAL', 9003)
 ON DUPLICATE KEY UPDATE department=department;
 
 select * from employees;
@@ -73,7 +73,14 @@ select * from employees;
 select * from qt_table; 
 select * from attendance_records;
 
-delete from attendance_records where attendance_date != '2026-01-13';
+delete from attendance_records where employee_mobile ='9876543210';
+
+SELECT * 
+FROM attendance_records 
+WHERE employee_id = 1003 AND attendance_date = CURDATE();
+
+DELETE FROM attendance_records 
+WHERE employee_id = 1001 AND attendance_date = CURDATE();
 
 -----
 

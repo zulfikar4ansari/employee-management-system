@@ -1,5 +1,6 @@
 package com.auth.controller;
 
+import com.auth.client.EmployeeClient;
 import com.auth.model.AuthResponse;
 import com.auth.model.OtpRequest;
 import com.auth.model.OtpVerifyRequest;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/auth")
 public class AuthController {
 
+    private final EmployeeClient employeeClient;
     private final OtpService otpService;
     private final JwtTokenService jwtTokenService;
     private final AuthSessionService sessionService;
@@ -23,10 +25,11 @@ public class AuthController {
     public AuthController(
             OtpService otpService,
             JwtTokenService jwtTokenService,
-            AuthSessionService sessionService) {
+            AuthSessionService sessionService,EmployeeClient employeeClient) {
         this.otpService = otpService;
         this.jwtTokenService = jwtTokenService;
         this.sessionService = sessionService;
+        this.employeeClient=employeeClient;
     }
 
     /**
@@ -42,6 +45,7 @@ public class AuthController {
     /**
      * STEP-2: Verify OTP → Issue JWT → Store Session
      */
+
     @PostMapping("/verify-otp")
     public ApiResponse<AuthResponse> verifyOtp(@RequestBody OtpVerifyRequest req) {
 
@@ -49,22 +53,18 @@ public class AuthController {
             throw new RuntimeException("Invalid OTP");
         }
 
-        Long employeeId = 1001L; // Will be DB-driven later
+        // ✅ Call Employee-Service to fetch employeeId
+        Long employeeId = employeeClient.getEmployeeIdByMobile(req.mobile());
 
-        String accessToken =
-                jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+        // ✅ JWT with correct employeeId
+        String access = jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+        String refresh = jwtTokenService.generateRefreshToken();
 
-        String refreshToken =
-                jwtTokenService.generateRefreshToken();
+        sessionService.storeSession(jwtTokenService.createSession(req.mobile(), employeeId));
 
-        // Store login session in Redis
-        sessionService.storeSession(
-                jwtTokenService.createSession(req.mobile(), employeeId)
-        );
+        AuthResponse response = new AuthResponse(access, refresh);
 
-        return ApiResponse.ok(
-                new AuthResponse(accessToken, refreshToken),
-                "Login successful"
-        );
+        return ApiResponse.ok(response, "Login successful");
     }
+
 }
