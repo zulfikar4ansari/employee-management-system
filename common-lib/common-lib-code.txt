@@ -82,7 +82,8 @@
 
 </project>
 
--------------------------------------------------------------------------------------------------
+
+-------------------
 package com.common_lib.constants;
 
 /**
@@ -107,7 +108,8 @@ public final class RedisKeys {
     public static final String ATTENDANCE = "ATT:";
 }
 
--------------------------------------------------------------------------------------------------
+
+-------------------
 package com.common_lib.dto;
 
 /**
@@ -130,7 +132,8 @@ public record ApiResponse<T>(
     }
 }
 
--------------------------------------------------------------------------------------------------
+-------------------
+
 package com.common_lib.dto;
 
 import java.time.OffsetDateTime;
@@ -145,7 +148,7 @@ public record ErrorResponse(
         OffsetDateTime timestamp
 ) {}
 
--------------------------------------------------------------------------------------------------
+-------------------
 package com.common_lib.events;
 
 import java.time.LocalDate;
@@ -166,7 +169,27 @@ public record AttendanceEvent(
         Double workedHours        // only for OUT events
 ) {}
 
--------------------------------------------------------------------------------------------------
+-------------------
+package com.common_lib.events;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+/**
+ * Shared Kafka event between Attendance-Service and Notification-Service.
+ */
+public record AttendanceNotificationEvent(
+        Long employeeId,
+        String employeeMobile,
+        String hrMobile,
+        String status,
+        String qrCodeValue,
+        LocalDate date,
+        LocalTime time,
+        String message
+) {}
+
+-------------------
 package com.common_lib.exceptions;
 
 /**
@@ -187,7 +210,8 @@ public class BusinessException extends RuntimeException {
     }
 }
 
--------------------------------------------------------------------------------------------------
+
+-------------------
 package com.common_lib.jwt;
 
 import java.time.OffsetDateTime;
@@ -203,7 +227,8 @@ public record UserSession(
         OffsetDateTime issuedAt
 ) {}
 
--------------------------------------------------------------------------------------------------
+
+-------------------
 package com.common_lib.utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -241,14 +266,6 @@ public final class JsonUtils {
     }
 }
 
--------------------------------------------------------------------------------------------------
+-------------------
 
--------------------------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------------------------
+-------------------

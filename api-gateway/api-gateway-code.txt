@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>api-gateway</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>api-gateway</name>
+	<description>API Gateway for EMS microservices</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+		<spring-cloud.version>2025.0.1</spring-cloud.version>
+		<jjwt.version>0.11.5</jjwt.version>
+	</properties>
+
+	<dependencies>
+		<!-- Spring Cloud Gateway (Reactive) -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-gateway</artifactId>
+		</dependency>
+
+		<!-- WebFlux runtime (Gateway is reactive) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+
+		<!-- Redis reactive for rate limiting -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+		</dependency>
+
+		<!-- JWT support -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>${jjwt.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Spring Boot Test + JUnit 5 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Shared contracts -->
+		<dependency>
+			<groupId>com.ems</groupId>
+			<artifactId>common-lib</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+	<!-- Spring Cloud BOM -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+
+-------------
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+
+            # ✅ AUTH SERVICE (Public)
+            - id: auth-service
+              uri: http://localhost:8081
+              predicates:
+                - Path=/auth/**
+
+            # ✅ EMPLOYEE SERVICE (Protected + Rate Limit)
+            - id: employee-service
+              uri: http://localhost:8082
+              predicates:
+                - Path=/employee/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@rateLimiterKeyResolver}"
+                    redis-rate-limiter.replenishRate: 10
+                    redis-rate-limiter.burstCapacity: 20
+
+            # ✅ ATTENDANCE SERVICE (Protected + Rate Limit)
+            - id: attendance-service
+              uri: http://localhost:8083
+              predicates:
+                - Path=/attendance/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@rateLimiterKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+
+            # ✅ PAYROLL SERVICE (Protected + Strong limit)
+            - id: payroll-service
+              uri: http://localhost:8084
+              predicates:
+                - Path=/payroll/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@rateLimiterKeyResolver}"
+                    redis-rate-limiter.replenishRate: 2
+                    redis-rate-limiter.burstCapacity: 5
+
+            # ✅ WebSocket Routing (Notification service)
+            - id: notification-ws
+              uri: ws://localhost:8090
+              predicates:
+                - Path=/ws/**
+
+security:
+  jwt:
+    secret: ems-secret-key-ems-secret-key-ems-secret-key
+
+cors:
+  allowed-origins: "http://localhost:3000,http://localhost:4200,http://localhost:5173"
+  allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+  allowed-headers: "*"
+
+
+-------------
+package com.api_gateway.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsWebFilter;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Enables browser clients (React/Angular) to call gateway APIs.
+ * Without this, browser blocks requests (CORS error).
+ */
+@Configuration
+public class CorsConfig {
+
+    @Value("${cors.allowed-origins}")
+    private String allowedOrigins;
+
+    @Value("${cors.allowed-methods}")
+    private String allowedMethods;
+
+    @Value("${cors.allowed-headers}")
+    private String allowedHeaders;
+
+    @Bean
+    public CorsWebFilter corsWebFilter() {
+
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        config.setAllowedMethods(Arrays.asList(allowedMethods.split(",")));
+        config.setAllowedHeaders(List.of(allowedHeaders));
+
+        // allow cookies / Authorization headers
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", config);
+
+        return new CorsWebFilter(source);
+    }
+}
+
+
+-------------
+package com.api_gateway.config;
+
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * Controls which routes are open vs secured.
+ */
+@Component
+public class SecurityRouteValidator {
+
+    private static final List<String> publicEndpoints = List.of(
+            "/auth/send-otp",
+            "/auth/verify-otp",
+            "/auth/"
+    );
+
+    public boolean isPublic(String path) {
+        return publicEndpoints.stream().anyMatch(path::startsWith);
+    }
+}
+
+
+-------------
+
+package com.api_gateway.error;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+import java.time.OffsetDateTime;
+import java.util.Map;
+
+/**
+ * Returns consistent JSON error response for any gateway exception.
+ */
+@Configuration
+@Order(-2)
+public class GlobalErrorHandler implements ErrorWebExceptionHandler {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    @Override
+    public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
+
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+
+        Map<String, Object> errorBody = Map.of(
+                "timestamp", OffsetDateTime.now().toString(),
+                "status", status.value(),
+                "error", status.getReasonPhrase(),
+                "message", ex.getMessage() == null ? "Gateway error" : ex.getMessage(),
+                "path", exchange.getRequest().getPath().value()
+        );
+
+        try {
+            byte[] bytes = mapper.writeValueAsBytes(errorBody);
+
+            exchange.getResponse().setStatusCode(status);
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+            return exchange.getResponse().writeWith(
+                    Mono.just(exchange.getResponse().bufferFactory().wrap(bytes))
+            );
+
+        } catch (Exception e) {
+            exchange.getResponse().setStatusCode(status);
+            return exchange.getResponse().setComplete();
+        }
+    }
+}
+
+-------------
+package com.api_gateway.filter;
+
+import com.api_gateway.config.SecurityRouteValidator;
+import com.api_gateway.jwt.JwtTokenValidator;
+import io.jsonwebtoken.Claims;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+/**
+ * Global filter that secures protected routes with JWT validation.
+ * Adds identity headers for downstream services.
+ */
+@Component
+public class JwtAuthFilter implements GlobalFilter {
+
+    private final SecurityRouteValidator routeValidator;
+    private final JwtTokenValidator validator;
+
+    public JwtAuthFilter(SecurityRouteValidator routeValidator, JwtTokenValidator validator) {
+        this.routeValidator = routeValidator;
+        this.validator = validator;
+    }
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+
+        String path = exchange.getRequest().getPath().value();
+
+        // Public endpoints do not require JWT
+        if (routeValidator.isPublic(path)) {
+            return chain.filter(exchange);
+        }
+
+        // Protected endpoints require Authorization header
+        String authHeader = exchange.getRequest()
+                .getHeaders()
+                .getFirst(HttpHeaders.AUTHORIZATION);
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+
+        String token = authHeader.substring(7);
+
+        try {
+            Claims claims = validator.validateAndGetClaims(token);
+
+            String mobile = claims.getSubject();
+            Object employeeId = claims.get("employeeId");
+
+            // Forward claims as headers (services should trust gateway)
+            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                    .header("X-Mobile", mobile)
+                    .header("X-Employee-Id", String.valueOf(employeeId))
+                    .build();
+
+            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+
+        } catch (Exception ex) {
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
+        }
+    }
+}
+
+
+-------------
+package com.api_gateway.jwt;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Validates token signature + expiration.
+ * Extracts claims (subject, employeeId).
+ */
+@Component
+public class JwtTokenValidator {
+
+    private final SecretKey signingKey;
+
+    public JwtTokenValidator(@Value("${security.jwt.secret}") String secret) {
+        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public Claims validateAndGetClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+}
+
+
+-------------
+package com.api_gateway.rate;
+
+import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+/**
+ * Rate limiting key strategy.
+ * If employeeId exists, rate-limit per employee.
+ * Else fallback to IP address.
+ */
+@Component("rateLimiterKeyResolver")
+public class RateLimiterKeyResolver implements KeyResolver {
+
+    @Override
+    public Mono<String> resolve(ServerWebExchange exchange) {
+
+        String empId = exchange.getRequest().getHeaders().getFirst("X-Employee-Id");
+
+        if (empId != null && !empId.isBlank()) {
+            return Mono.just("EMPLOYEE:" + empId);
+        }
+
+        String ip = "UNKNOWN";
+        if (exchange.getRequest().getRemoteAddress() != null) {
+            ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
+        }
+
+        return Mono.just("IP:" + ip);
+    }
+}
+
+
+-------------
+package com.api_gateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ApiGatewayApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ApiGatewayApplication.class, args);
+	}
+
+}
+
+
+-------------
+

@@ -1,4 +1,4 @@
-------------------------------------------------------------------------------------------
+
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -36,6 +36,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+
 
 		<!-- Redis Session Store -->
 		<dependency>
@@ -91,43 +97,8 @@
 	</build>
 
 </project>
-------------------------------------------------------------------------------------------
-server:
-  port: 8081        # Auth-Service runs on port 8081
 
-spring:
-  application:
-    name: auth-service
-
-  redis:
-    host: redis # Redis host (change if using Docker / cloud)
-    port: 6379
-    database: 0
-    timeout: 2000ms
-
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-
-# JWT configuration
-security:
-  jwt:
-    secret: ems-secret-key     # Replace with secure key in production
-    access-token-expiry-seconds: 3600
-    refresh-token-expiry-seconds: 86400
-
-# OTP configuration
-otp:
-  expiry-minutes: 5
-
-logging:
-  level:
-    root: INFO
-    com.ems.auth: DEBUG
-
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.audit;
 
 import org.springframework.stereotype.Component;
@@ -145,9 +116,47 @@ public class AuditPublisher
 }
 
 
+----------------
+package com.auth.client;
+
+import com.auth.dto.EmployeeMobileLookupResponse;
+
+import com.common_lib.dto.ApiResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Component
+public class EmployeeClient {
+
+    private final WebClient webClient;
+
+    public EmployeeClient(@Value("${employee-service.base-url}") String baseUrl) {
+        this.webClient = WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
+    public Long getEmployeeIdByMobile(String mobile) {
+
+        ApiResponse<EmployeeMobileLookupResponse> response =
+                webClient.get()
+                        .uri("/employee/by-mobile/{mobile}", mobile)
+                        .retrieve()
+                        .bodyToMono(new ParameterizedTypeReference<ApiResponse<EmployeeMobileLookupResponse>>() {})
+                        .block();
+
+        if (response == null || response.data() == null) {
+            throw new RuntimeException("Employee lookup failed for mobile: " + mobile);
+        }
+
+        return response.data().employeeId();
+    }
+}
 
 
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.config;
 
 import org.springframework.context.annotation.Bean;
@@ -177,12 +186,10 @@ public class RedisConfig {
 }
 
 
-
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.controller;
 
+import com.auth.client.EmployeeClient;
 import com.auth.model.AuthResponse;
 import com.auth.model.OtpRequest;
 import com.auth.model.OtpVerifyRequest;
@@ -199,6 +206,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/auth")
 public class AuthController {
 
+    private final EmployeeClient employeeClient;
     private final OtpService otpService;
     private final JwtTokenService jwtTokenService;
     private final AuthSessionService sessionService;
@@ -206,10 +214,11 @@ public class AuthController {
     public AuthController(
             OtpService otpService,
             JwtTokenService jwtTokenService,
-            AuthSessionService sessionService) {
+            AuthSessionService sessionService,EmployeeClient employeeClient) {
         this.otpService = otpService;
         this.jwtTokenService = jwtTokenService;
         this.sessionService = sessionService;
+        this.employeeClient=employeeClient;
     }
 
     /**
@@ -225,6 +234,7 @@ public class AuthController {
     /**
      * STEP-2: Verify OTP → Issue JWT → Store Session
      */
+
     @PostMapping("/verify-otp")
     public ApiResponse<AuthResponse> verifyOtp(@RequestBody OtpVerifyRequest req) {
 
@@ -232,30 +242,33 @@ public class AuthController {
             throw new RuntimeException("Invalid OTP");
         }
 
-        Long employeeId = 1001L; // Will be DB-driven later
+        // ✅ Call Employee-Service to fetch employeeId
+        Long employeeId = employeeClient.getEmployeeIdByMobile(req.mobile());
 
-        String accessToken =
-                jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+        // ✅ JWT with correct employeeId
+        String access = jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+        String refresh = jwtTokenService.generateRefreshToken();
 
-        String refreshToken =
-                jwtTokenService.generateRefreshToken();
+        sessionService.storeSession(jwtTokenService.createSession(req.mobile(), employeeId));
 
-        // Store login session in Redis
-        sessionService.storeSession(
-                jwtTokenService.createSession(req.mobile(), employeeId)
-        );
+        AuthResponse response = new AuthResponse(access, refresh);
 
-        return ApiResponse.ok(
-                new AuthResponse(accessToken, refreshToken),
-                "Login successful"
-        );
+        return ApiResponse.ok(response, "Login successful");
     }
+
 }
 
+----------------
+package com.auth.dto;
+
+public record EmployeeMobileLookupResponse(
+        Long employeeId,
+        String mobile
+) {}
 
 
+----------------
 
-------------------------------------------------------------------------------------------
 package com.auth.exception;
 
 import org.springframework.http.HttpStatus;
@@ -276,11 +289,7 @@ public class GlobalExceptionHandler {
     }
 }
 
-
-
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.model;
 
 /**
@@ -292,9 +301,7 @@ public record AuthResponse(
 ) {}
 
 
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.model;
 
 /**
@@ -303,9 +310,7 @@ package com.auth.model;
 public record OtpRequest(String mobile) {}
 
 
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.model;
 
 /**
@@ -317,9 +322,7 @@ public record OtpVerifyRequest(
 ) {}
 
 
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.service;
 
 import com.common_lib.constants.RedisKeys;
@@ -353,9 +356,7 @@ public class AuthSessionService {
 }
 
 
-
-
-------------------------------------------------------------------------------------------
+----------------
 package com.auth.service;
 
 import com.common_lib.jwt.UserSession;
@@ -427,10 +428,7 @@ public class JwtTokenService {
     }
 }
 
-
-
-------------------------------------------------------------------------------------------
-
+----------------
 package com.auth.service;
 
 import com.common_lib.constants.RedisKeys;
@@ -480,8 +478,7 @@ public class OtpService {
 }
 
 
-
-------------------------------------------------------------------------------------------
+----------------
 
 package com.auth;
 
@@ -503,28 +500,31 @@ public class AuthServiceApplication {
 
 }
 
+----------------
 
 
-------------------------------------------------------------------------------------------
+----------------
 
 
+----------------
 
 
-------------------------------------------------------------------------------------------
+----------------
 
 
+----------------
 
 
-
-------------------------------------------------------------------------------------------
-
+----------------
 
 
-
-------------------------------------------------------------------------------------------
-
+----------------
 
 
+----------------
 
 
-------------------------------------------------------------------------------------------
+----------------
+
+
+----------------

@@ -1,0 +1,659 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>attendance-service</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>attendance-service</name>
+	<description>Attendance Service (Time IN/OUT + Kafka Event)</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+
+		<!-- REST APIs -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- JPA / Hibernate -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- Kafka -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
+		<!-- MySQL -->
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Shared ApiResponse -->
+		<dependency>
+			<groupId>com.ems</groupId>
+			<artifactId>common-lib</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<!-- Tests -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+
+-------
+server:
+  port: 8083
+
+spring:
+  application:
+    name: attendance-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/ems_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: root
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+attendance:
+  kafka-topic: attendance.notification
+  hr-mobile: "9000000002"
+
+
+-------
+package com.attendance_service.controller;
+
+import com.attendance_service.dto.AttendanceResponse;
+import com.attendance_service.dto.QrScanRequest;
+import com.attendance_service.model.AttendanceActionResponse;
+import com.attendance_service.service.AttendanceService;
+import com.common_lib.dto.ApiResponse;
+
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/attendance")
+public class AttendanceController {
+
+    private final AttendanceService service;
+
+    public AttendanceController(AttendanceService service) {
+        this.service = service;
+    }
+
+    @PostMapping("/scan-qr")
+    public ApiResponse<AttendanceResponse> scanQr(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader(value = "X-Mobile", required = false) String employeeMobile,
+            @RequestBody QrScanRequest request
+    ) {
+        AttendanceResponse response = service.markAttendance(employeeId, employeeMobile, request.qrCodeValue());
+        return ApiResponse.ok(response, "Attendance processed");
+    }
+
+    // New Added
+    @PostMapping("/mark-in")
+    public ApiResponse<AttendanceActionResponse> markIn(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader("X-Mobile") String employeeMobile
+    ) {
+        AttendanceActionResponse res = service.markIn(employeeId, employeeMobile);
+        return ApiResponse.ok(res, "IN marked successfully");
+    }
+
+    @PostMapping("/mark-out")
+    public ApiResponse<AttendanceActionResponse> markOut(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader("X-Mobile") String employeeMobile
+    ) {
+        AttendanceActionResponse res = service.markOut(employeeId, employeeMobile);
+        return ApiResponse.ok(res, "OUT marked successfully");
+    }
+
+
+}
+
+
+-------
+
+package com.attendance_service.dto;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+public record AttendanceResponse(
+        Long employeeId,
+        String employeeMobile,
+        String qrCodeValue,
+        String status,
+        String reason,
+        LocalDate attendanceDate,
+        LocalTime attendanceTime
+) {}
+
+-------
+package com.attendance_service.dto;
+
+public record QrScanRequest(String qrCodeValue) {}
+
+-------
+
+package com.attendance_service.entity;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+@Entity
+@Table(name="attendance_records")
+public class AttendanceEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name="employee_id", nullable=false)
+    private Long employeeId;
+
+    @Column(name="employee_mobile")
+    private String employeeMobile;
+
+    @Column(name="attendance_date", nullable=false)
+    private LocalDate attendanceDate;
+
+    @Column(name="attendance_time", nullable=false)
+    private LocalTime attendanceTime;
+
+    @Column(name="qr_date", nullable=true)
+    private LocalDate qrDate;
+
+    @Column(name="qr_code_value", nullable=true, length=16)
+    private String qrCodeValue;
+
+    @Column(name="status", nullable=false)
+    private String status;
+
+    @Column(name="reason")
+    private String reason;
+
+    @Column(name = "time_in")
+    private LocalTime timeIn;
+
+    @Column(name = "time_out")
+    private LocalTime timeOut;
+
+    @Column(name = "worked_minutes")
+    private Integer workedMinutes;
+
+    public LocalTime getTimeIn() {
+        return timeIn;
+    }
+
+    public void setTimeIn(LocalTime timeIn) {
+        this.timeIn = timeIn;
+    }
+
+    public LocalTime getTimeOut() {
+        return timeOut;
+    }
+
+    public void setTimeOut(LocalTime timeOut) {
+        this.timeOut = timeOut;
+    }
+
+    public Integer getWorkedMinutes() {
+        return workedMinutes;
+    }
+
+    public void setWorkedMinutes(Integer workedMinutes) {
+        this.workedMinutes = workedMinutes;
+    }
+
+    public Long getId() { return id; }
+    public Long getEmployeeId() { return employeeId; }
+    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
+    public String getEmployeeMobile() { return employeeMobile; }
+    public void setEmployeeMobile(String employeeMobile) { this.employeeMobile = employeeMobile; }
+    public LocalDate getAttendanceDate() { return attendanceDate; }
+    public void setAttendanceDate(LocalDate attendanceDate) { this.attendanceDate = attendanceDate; }
+    public LocalTime getAttendanceTime() { return attendanceTime; }
+    public void setAttendanceTime(LocalTime attendanceTime) { this.attendanceTime = attendanceTime; }
+    public LocalDate getQrDate() { return qrDate; }
+    public void setQrDate(LocalDate qrDate) { this.qrDate = qrDate; }
+    public String getQrCodeValue() { return qrCodeValue; }
+    public void setQrCodeValue(String qrCodeValue) { this.qrCodeValue = qrCodeValue; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+}
+
+-------
+package com.attendance_service.entity;
+
+import jakarta.persistence.*;
+
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "qt_table")
+public class QrCodeEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "qr_date", nullable = false)
+    private LocalDate qrDate;
+
+    @Column(name = "qr_code_value", nullable = false, length = 16)
+    private String qrCodeValue;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean active = true;
+
+    public Long getId() { return id; }
+
+    public LocalDate getQrDate() { return qrDate; }
+    public void setQrDate(LocalDate qrDate) { this.qrDate = qrDate; }
+
+    public String getQrCodeValue() { return qrCodeValue; }
+    public void setQrCodeValue(String qrCodeValue) { this.qrCodeValue = qrCodeValue; }
+
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
+}
+
+
+-------
+package com.attendance_service.kafka;
+
+import com.common_lib.events.AttendanceNotificationEvent;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+
+/**
+ * Publishes Kafka messages.
+ */
+@Component
+public class KafkaPublisher {
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Value("${attendance.kafka-topic}")
+    private String topic;
+
+    public KafkaPublisher(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
+
+    public void publishAttendanceNotification(AttendanceNotificationEvent event) {
+        kafkaTemplate.send(topic, String.valueOf(event.employeeId()), event);
+    }
+}
+
+
+-------
+package com.attendance_service.model;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+public record AttendanceActionResponse(
+        Long employeeId,
+        String eventType,
+        LocalDate attendanceDate,
+        LocalTime attendanceTime,
+        String status,
+        Integer workedMinutes
+) {}
+
+
+-------
+package com.attendance_service.repository;
+
+import com.attendance_service.entity.AttendanceEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.Optional;
+
+public interface AttendanceRepository extends JpaRepository<AttendanceEntity, Long> {
+    Optional<AttendanceEntity> findByEmployeeIdAndAttendanceDate(Long employeeId, LocalDate attendanceDate);
+
+}
+
+
+-------
+package com.attendance_service.repository;
+
+import com.attendance_service.entity.QrCodeEntity;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.Optional;
+
+public interface QrCodeRepository extends JpaRepository<QrCodeEntity, Long> {
+
+    Optional<QrCodeEntity> findByQrDateAndQrCodeValue(LocalDate qrDate, String qrCodeValue);
+}
+
+
+-------
+package com.attendance_service.service;
+
+import com.attendance_service.dto.AttendanceResponse;
+import com.attendance_service.entity.AttendanceEntity;
+import com.attendance_service.kafka.KafkaPublisher;
+import com.attendance_service.model.AttendanceActionResponse;
+import com.attendance_service.repository.AttendanceRepository;
+
+import com.common_lib.events.AttendanceNotificationEvent;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+@Service
+public class AttendanceService {
+
+    private final AttendanceRepository attendanceRepo;
+    private final QrValidationService qrValidationService;
+    private final KafkaPublisher kafkaPublisher;
+
+    @Value("${attendance.hr-mobile}")
+    private String hrMobile;
+
+    public AttendanceService(
+            AttendanceRepository attendanceRepo,
+            QrValidationService qrValidationService,
+            KafkaPublisher kafkaPublisher
+    ) {
+        this.attendanceRepo = attendanceRepo;
+        this.qrValidationService = qrValidationService;
+        this.kafkaPublisher = kafkaPublisher;
+    }
+
+    public AttendanceResponse markAttendance(Long empId, String empMobile, String qrCodeValue) {
+
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        var validation = qrValidationService.validate(qrCodeValue);
+
+        String status = validation.valid() ? "PRESENT" : "ABSENT";
+        String reason = validation.valid() ? null : validation.reason();
+
+        AttendanceEntity entity = new AttendanceEntity();
+        entity.setEmployeeId(empId);
+        entity.setEmployeeMobile(empMobile);
+        entity.setAttendanceDate(today);
+        entity.setAttendanceTime(now);
+        entity.setQrDate(validation.qrDate());
+        entity.setQrCodeValue(qrCodeValue);
+        entity.setStatus(status);
+        entity.setReason(reason);
+
+        attendanceRepo.save(entity);
+
+        // Kafka Notification Event
+        String msg = "Attendance " + status + " | EmpId=" + empId + " | Date=" + today + " | Time=" + now;
+
+        AttendanceNotificationEvent event = new AttendanceNotificationEvent(
+                empId,
+                empMobile,
+                hrMobile,
+                status,
+                qrCodeValue,
+                today,
+                now,
+                msg
+        );
+
+        kafkaPublisher.publishAttendanceNotification(event);
+
+        return new AttendanceResponse(empId, empMobile, qrCodeValue, status, reason, today, now);
+    }
+
+    public AttendanceActionResponse markIn(Long employeeId, String employeeMobile) {
+
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        AttendanceEntity entity = attendanceRepo.findByEmployeeIdAndAttendanceDate(employeeId, today)
+                .orElseGet(() -> {
+                    AttendanceEntity e = new AttendanceEntity();
+                    e.setEmployeeId(employeeId);
+                    e.setEmployeeMobile(employeeMobile);
+
+                    // ✅ required NOT NULL fields
+                    e.setAttendanceDate(today);
+                    e.setAttendanceTime(now);
+
+                    return e;
+                });
+
+        if (entity.getTimeIn() != null) {
+            throw new RuntimeException("Time-IN already marked for today");
+        }
+
+        // ✅ IN time
+        entity.setTimeIn(now);
+
+        // ✅ keep attendanceTime updated (NOT NULL)
+        entity.setAttendanceTime(now);
+
+        entity.setStatus("IN_MARKED");
+
+        attendanceRepo.save(entity);
+
+        String msg = "Employee " + employeeId + " marked IN at " + now;
+
+        AttendanceNotificationEvent event = new AttendanceNotificationEvent(
+                employeeId,
+                employeeMobile,
+                hrMobile,   // from application.yml
+                "IN",
+                null,
+                today,
+                now,
+                msg
+        );
+
+        kafkaPublisher.publishAttendanceNotification(event);
+
+        return new AttendanceActionResponse(employeeId, "IN", today, now, entity.getStatus(), null);
+    }
+
+
+    public AttendanceActionResponse markOut(Long employeeId, String employeeMobile) {
+
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        AttendanceEntity entity = attendanceRepo.findByEmployeeIdAndAttendanceDate(employeeId, today)
+                .orElseThrow(() -> new RuntimeException("Time-IN not marked yet"));
+
+        if (entity.getTimeOut() != null) {
+            throw new RuntimeException("Time-OUT already marked for today");
+        }
+
+        entity.setTimeOut(now);
+
+        int workedMinutes = 0;
+        if (entity.getTimeIn() != null) {
+            workedMinutes = (int) java.time.Duration.between(entity.getTimeIn(), now).toMinutes();
+        }
+
+        entity.setWorkedMinutes(workedMinutes);
+
+        // ✅ keep attendanceTime updated (NOT NULL)
+        entity.setAttendanceTime(now);
+
+        entity.setStatus("OUT_MARKED");
+
+        attendanceRepo.save(entity);
+
+        String msg = "Employee " + employeeId + " marked OUT at " + now + " WorkedMinutes=" + workedMinutes;
+
+        AttendanceNotificationEvent event = new AttendanceNotificationEvent(
+                employeeId,
+                employeeMobile,
+                hrMobile,
+                "OUT",
+                null,
+                today,
+                now,
+                msg
+        );
+
+        kafkaPublisher.publishAttendanceNotification(event);
+
+        return new AttendanceActionResponse(employeeId, "OUT", today, now, entity.getStatus(), workedMinutes);
+    }
+
+
+}
+
+
+-------
+package com.attendance_service.service;
+
+import com.attendance_service.repository.QrCodeRepository;
+import com.attendance_service.util.QrDecoderUtil;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+
+@Service
+public class QrValidationService {
+
+    private final QrCodeRepository qrRepo;
+
+    public QrValidationService(QrCodeRepository qrRepo) {
+        this.qrRepo = qrRepo;
+    }
+
+    public ValidationResult validate(String qrCodeValue) {
+
+        QrDecoderUtil.validate(qrCodeValue);
+
+        LocalDate serverToday = LocalDate.now();
+        LocalDate qrDate = QrDecoderUtil.extractDate(qrCodeValue);
+
+        if (!qrDate.equals(serverToday)) {
+            return ValidationResult.invalid(qrDate, "QR date mismatch with server date");
+        }
+
+        boolean found = qrRepo.findByQrDateAndQrCodeValue(serverToday, qrCodeValue).isPresent();
+        if (!found) {
+            return ValidationResult.invalid(qrDate, "QR not found or inactive");
+        }
+
+        return ValidationResult.valid(qrDate);
+    }
+
+    public record ValidationResult(boolean valid, LocalDate qrDate, String reason) {
+        public static ValidationResult valid(LocalDate date) { return new ValidationResult(true, date, null); }
+        public static ValidationResult invalid(LocalDate date, String reason) { return new ValidationResult(false, date, reason); }
+    }
+}
+
+-------
+package com.attendance_service.util;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+public final class QrDecoderUtil {
+
+    private QrDecoderUtil() {}
+
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    public static void validate(String qr) {
+        if (qr == null || qr.isBlank()) throw new RuntimeException("QR is empty");
+        if (!qr.matches("\\d{16}")) throw new RuntimeException("QR must be 16-digit numeric");
+    }
+
+    public static LocalDate extractDate(String qr) {
+        return LocalDate.parse(qr.substring(0, 8), FMT);
+    }
+}
+
+
+-----------
+package com.attendance_service;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class AttendanceServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(AttendanceServiceApplication.class, args);
+	}
+
+}
+
+
+-----------
+
+
+------------

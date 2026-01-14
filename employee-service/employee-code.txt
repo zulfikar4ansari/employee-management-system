@@ -1,0 +1,417 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+	<artifactId>employee-service</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>employee-service</name>
+	<description>Employee Profile Service (Redis Cache-First + MySQL)</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+		<!-- Spring MVC REST controller support -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- Spring Data JPA + Hibernate ORM -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- MySQL database driver (runtime only) -->
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Redis client + Spring abstraction -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!-- Shared library: RedisKeys, ApiResponse, JsonUtils, etc -->
+		<dependency>
+			<groupId>com.ems</groupId>
+			<artifactId>common-lib</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<!-- Unit + integration testing -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+
+-------------
+server:
+  port: 8082 # Employee service runs on 8082
+
+spring:
+  application:
+    name: employee-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/ems_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: root
+    password: root
+
+  jpa:
+    hibernate:
+      ddl-auto: none       # schema controlled using schema-mysql.sql
+    show-sql: true         # prints SQL to console (debug)
+    properties:
+      hibernate:
+        format_sql: true
+
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 2000ms
+
+employee:
+  cache:
+    ttl-seconds: 600 # employee profile cache TTL
+
+-------------
+package com.employee_service.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+/**
+ * Redis configuration for employee-service.
+ * Purpose: Provide redis client beans to store/retrieve employee profile cache.
+ */
+@Configuration
+public class RedisConfig {
+
+    /**
+     * Creates Redis connection factory.
+     * Uses spring.redis.* properties from application.yml by default.
+     */
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        return new LettuceConnectionFactory();
+    }
+
+    /**
+     * StringRedisTemplate helps store key/value as strings.
+     * We store JSON data as String.
+     */
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory factory) {
+        return new StringRedisTemplate(factory);
+    }
+}
+
+
+-------------
+package com.employee_service.controller;
+
+
+import com.common_lib.dto.ApiResponse;
+import com.employee_service.dto.EmployeeMobileLookupResponse;
+import com.employee_service.dto.EmployeeProfileResponse;
+import com.employee_service.entity.EmployeeEntity;
+import com.employee_service.service.EmployeeProfileService;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Gateway-ready controller.
+ * No JWT parsing here.
+ * Identity comes from API Gateway headers.
+ */
+@RestController
+@RequestMapping("/employee")
+public class EmployeeController {
+
+    private final EmployeeProfileService service;
+
+    public EmployeeController(EmployeeProfileService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/profile")
+    public ApiResponse<EmployeeProfileResponse> profile(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader(value = "X-Mobile", required = false) String mobile
+    ) {
+
+        EmployeeProfileResponse profile = service.getEmployeeProfileById(employeeId);
+
+        return ApiResponse.ok(profile, "Employee profile fetched");
+    }
+
+    @GetMapping("/by-mobile/{mobile}")
+    public ApiResponse<EmployeeMobileLookupResponse> getEmployeeByMobile(@PathVariable String mobile) {
+
+        var emp = service.findByMobile(mobile);
+
+        var resp = new EmployeeMobileLookupResponse(emp.getEmployeeId(), emp.getMobile());
+
+        return ApiResponse.ok(resp, "Employee found");
+    }
+}
+
+
+-------------
+package com.employee_service.dto;
+
+public record EmployeeMobileLookupResponse(Long employeeId,String mobile) {
+}
+
+
+-------------
+
+package com.employee_service.dto;
+
+/**
+ * Immutable DTO returned to client.
+ */
+public record EmployeeProfileResponse(
+        Long employeeId,
+        String department,
+        String role,
+        String shift,
+        Long payrollMappingId
+) {}
+
+-------------
+package com.employee_service.entity;
+
+import jakarta.persistence.*;
+
+/**
+ * JPA entity mapping for employees table.
+ * Purpose: Connect Java object with MySQL record.
+ */
+@Entity
+@Table(name = "employees")
+public class EmployeeEntity {
+
+    @Id
+    @Column(name = "employee_id")
+    private Long employeeId;
+
+    @Column(nullable = false, unique = true)
+    private String mobile;
+
+    @Column(nullable = false)
+    private String department;
+
+    @Column(nullable = false)
+    private String role;
+
+    @Column(nullable = false)
+    private String shift;
+
+    @Column(name = "payroll_mapping_id", nullable = false)
+    private Long payrollMappingId;
+
+    // Getters and setters required by Hibernate proxy mechanism
+
+    public Long getEmployeeId() { return employeeId; }
+    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
+
+    public String getMobile() { return mobile; }
+    public void setMobile(String mobile) { this.mobile = mobile; }
+
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+
+    public String getShift() { return shift; }
+    public void setShift(String shift) { this.shift = shift; }
+
+    public Long getPayrollMappingId() { return payrollMappingId; }
+    public void setPayrollMappingId(Long payrollMappingId) { this.payrollMappingId = payrollMappingId; }
+}
+
+
+-------------
+
+package com.employee_service.repository;
+
+import com.employee_service.entity.EmployeeEntity;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+/**
+ * Repository provides CRUD operations and query methods.
+ */
+public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Long> {
+    Optional<EmployeeEntity> findByMobile(String mobile);
+}
+
+-------------
+package com.employee_service.service;
+
+
+import com.common_lib.constants.RedisKeys;
+import com.common_lib.utils.JsonUtils;
+import com.employee_service.dto.EmployeeProfileResponse;
+import com.employee_service.entity.EmployeeEntity;
+import com.employee_service.repository.EmployeeRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Cache-first employee profile service.
+ *
+ * Flow:
+ * 1) Try Redis cache first
+ * 2) If miss -> fetch from MySQL
+ * 3) Store in Redis for next call
+ */
+@Service
+public class EmployeeProfileService {
+
+    private final StringRedisTemplate redis;
+    private final EmployeeRepository repository;
+
+    @Value("${employee.cache.ttl-seconds:600}")
+    private long ttlSeconds;
+
+    public EmployeeProfileService(StringRedisTemplate redis, EmployeeRepository repository) {
+        this.redis = redis;
+        this.repository = repository;
+    }
+
+    public EmployeeProfileResponse getEmployeeProfileById(Long employeeId) {
+
+        // Redis key uses common-lib constant for consistency
+        String redisKey = RedisKeys.EMPLOYEE_CACHE + employeeId;
+
+        // 1) Cache Lookup
+        String cachedJson = redis.opsForValue().get(redisKey);
+        if (cachedJson != null) {
+            return JsonUtils.fromJson(cachedJson, EmployeeProfileResponse.class);
+        }
+
+        // 2) DB fallback
+        EmployeeEntity entity = repository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
+
+        EmployeeProfileResponse response = new EmployeeProfileResponse(
+                entity.getEmployeeId(),
+                entity.getDepartment(),
+                entity.getRole(),
+                entity.getShift(),
+                entity.getPayrollMappingId()
+        );
+
+        // 3) Store in Redis
+        redis.opsForValue().set(
+                redisKey,
+                JsonUtils.toJson(response),
+                ttlSeconds,
+                TimeUnit.SECONDS
+        );
+
+        return response;
+    }
+
+    public EmployeeEntity findByMobile(String mobile) {
+        return repository.findByMobile(mobile)
+                .orElseThrow(() -> new RuntimeException("Employee not found for mobile: " + mobile));
+    }
+
+
+}
+
+
+-------------
+package com.employee_service;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class EmployeeServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(EmployeeServiceApplication.class, args);
+	}
+
+}
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+
+
+-------------
+

@@ -1,0 +1,364 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.ems</groupId>
+		<artifactId>employee-management-system</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>notification-service</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>notification-service</name>
+	<description>Kafka consumer notification service (WhatsApp/SMS)</description>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+
+		<!-- Spring Kafka (Consumer) -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
+		<!-- Basic Spring Boot -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+
+		<!-- For REST health endpoints (optional but recommended) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- common-lib (ApiResponse if needed later) -->
+		<dependency>
+			<groupId>com.ems</groupId>
+			<artifactId>common-lib</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<!-- Tests -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+
+------------
+server:
+  port: 8086
+
+spring:
+  application:
+    name: notification-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+      group-id: notification-service-group-v2
+      auto-offset-reset: earliest
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+
+      properties:
+        # delegate actual value deserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+
+        # allow deserialization from all packages
+        spring.json.trusted.packages: "*"
+
+        # IMPORTANT: ignore producer __TypeId__ headers
+        spring.json.use.type.headers: false
+
+        # force payload type to common-lib event class
+        spring.json.value.default.type: com.common_lib.events.AttendanceNotificationEvent
+
+notification:
+  topic: attendance.notification
+
+  channels:
+    whatsapp: true
+    sms: false
+
+------------
+package com.notification_service.config;
+
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Placeholder config.
+ * Spring Boot auto config is enough using application.yml properties.
+ */
+@Configuration
+public class KafkaConsumerConfig {
+}
+
+
+------------
+package com.notification_service.kafka;
+
+
+import com.common_lib.events.AttendanceNotificationEvent;
+import com.notification_service.model.NotificationRequest;
+import com.notification_service.service.NotificationDispatcher;
+import com.notification_service.service.TemplateService;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+/**
+ * Kafka consumer for attendance.notification topic.
+ */
+@Component
+public class AttendanceNotificationConsumer {
+
+    private final NotificationDispatcher dispatcher;
+    private final TemplateService templateService;
+
+    public AttendanceNotificationConsumer(NotificationDispatcher dispatcher,
+                                         TemplateService templateService) {
+        this.dispatcher = dispatcher;
+        this.templateService = templateService;
+    }
+
+    @KafkaListener(topics = "${notification.topic}", groupId = "notification-service-group")
+    public void consume(AttendanceNotificationEvent event) {
+
+        // Employee notification
+        if (event.employeeMobile() != null && !event.employeeMobile().isBlank()) {
+            dispatcher.sendWhatsApp(new NotificationRequest(
+                    event.employeeMobile(),
+                    templateService.buildEmployeeMessage(event)
+            ));
+        }
+
+        // HR notification
+        if (event.hrMobile() != null && !event.hrMobile().isBlank()) {
+            dispatcher.sendWhatsApp(new NotificationRequest(
+                    event.hrMobile(),
+                    templateService.buildHrMessage(event)
+            ));
+        }
+    }
+}
+
+
+------------
+package com.notification_service.model;
+
+/**
+ * Normalized notification request for sending via providers.
+ */
+public record NotificationRequest(
+        String toMobile,
+        String message
+) {}
+
+
+------------
+package com.notification_service.provider;
+
+
+import com.notification_service.model.NotificationRequest;
+
+/**
+ * Strategy interface for different channels.
+ */
+public interface NotificationProvider {
+
+    ProviderType type();
+
+    void send(NotificationRequest request);
+}
+
+
+------------
+package com.notification_service.provider;
+
+public enum ProviderType {
+    WHATSAPP,
+    SMS
+}
+
+
+------------
+package com.notification_service.service;
+
+
+import com.notification_service.model.NotificationRequest;
+import com.notification_service.provider.NotificationProvider;
+import com.notification_service.provider.ProviderType;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+/**
+ * Picks the correct provider and sends notifications.
+ */
+@Service
+public class NotificationDispatcher {
+
+    private final List<NotificationProvider> providers;
+
+    @Value("${notification.channels.whatsapp:true}")
+    private boolean whatsappEnabled;
+
+    @Value("${notification.channels.sms:false}")
+    private boolean smsEnabled;
+
+    public NotificationDispatcher(List<NotificationProvider> providers) {
+        this.providers = providers;
+    }
+
+    public void sendWhatsApp(NotificationRequest request) {
+        if (!whatsappEnabled) return;
+        find(ProviderType.WHATSAPP).send(request);
+    }
+
+    public void sendSms(NotificationRequest request) {
+        if (!smsEnabled) return;
+        find(ProviderType.SMS).send(request);
+    }
+
+    private NotificationProvider find(ProviderType type) {
+        return providers.stream()
+                .filter(p -> p.type() == type)
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Provider not found: " + type));
+    }
+}
+
+
+------------
+
+package com.notification_service.service;
+
+
+import com.common_lib.events.AttendanceNotificationEvent;
+import org.springframework.stereotype.Service;
+
+/**
+ * Builds human readable messages.
+ */
+@Service
+public class TemplateService {
+
+    public String buildEmployeeMessage(AttendanceNotificationEvent e) {
+        return "Your attendance is marked as " + e.status()
+                + " on " + e.date() + " at " + e.time();
+    }
+
+    public String buildHrMessage(AttendanceNotificationEvent e) {
+        return "HR Alert: EmpId=" + e.employeeId()
+                + " Attendance=" + e.status()
+                + " Date=" + e.date() + " Time=" + e.time();
+    }
+}
+
+------------
+package com.notification_service.sms;
+
+
+import com.notification_service.model.NotificationRequest;
+import com.notification_service.provider.NotificationProvider;
+import com.notification_service.provider.ProviderType;
+import org.springframework.stereotype.Component;
+
+/**
+ * Stub SMS provider.
+ * Replace with Twilio / AWS SNS / MSG91 etc.
+ */
+@Component
+public class SmsProviderStub implements NotificationProvider {
+
+    @Override
+    public ProviderType type() {
+        return ProviderType.SMS;
+    }
+
+    @Override
+    public void send(NotificationRequest request) {
+        System.out.println("[SMS-STUB] To=" + request.toMobile() + " Msg=" + request.message());
+    }
+}
+
+
+------------
+package com.notification_service.whatsapp;
+
+
+import com.notification_service.model.NotificationRequest;
+import com.notification_service.provider.NotificationProvider;
+import com.notification_service.provider.ProviderType;
+import org.springframework.stereotype.Component;
+
+/**
+ * Stub WhatsApp provider.
+ * Replace with Meta WhatsApp Business API / Twilio / Gupshup integration.
+ */
+@Component
+public class WhatsAppProviderStub implements NotificationProvider {
+
+    @Override
+    public ProviderType type() {
+        return ProviderType.WHATSAPP;
+    }
+
+    @Override
+    public void send(NotificationRequest request) {
+        System.out.println("[WHATSAPP-STUB] To=" + request.toMobile() + " Msg=" + request.message());
+    }
+}
+
+
+------------
+package com.notification_service;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class NotificationServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(NotificationServiceApplication.class, args);
+	}
+
+}
+
+
