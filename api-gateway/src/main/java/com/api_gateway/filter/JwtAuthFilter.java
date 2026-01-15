@@ -22,6 +22,8 @@ public class JwtAuthFilter implements GlobalFilter {
     private final SecurityRouteValidator routeValidator;
     private final JwtTokenValidator validator;
 
+
+
     public JwtAuthFilter(SecurityRouteValidator routeValidator, JwtTokenValidator validator) {
         this.routeValidator = routeValidator;
         this.validator = validator;
@@ -31,6 +33,8 @@ public class JwtAuthFilter implements GlobalFilter {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 
         String path = exchange.getRequest().getPath().value();
+
+
 
         // Public endpoints do not require JWT
         if (routeValidator.isPublic(path)) {
@@ -55,10 +59,13 @@ public class JwtAuthFilter implements GlobalFilter {
             String mobile = claims.getSubject();
             Object employeeId = claims.get("employeeId");
 
+            String role = (String) claims.get("role");
+
             // Forward claims as headers (services should trust gateway)
             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                     .header("X-Mobile", mobile)
                     .header("X-Employee-Id", String.valueOf(employeeId))
+                    .header("X-Role", role == null ? "" : role)   // ✅ NEW
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());

@@ -39,7 +39,11 @@ public class EmployeeController {
 
         var emp = service.findByMobile(mobile);
 
-        var resp = new EmployeeMobileLookupResponse(emp.getEmployeeId(), emp.getMobile());
+        var resp = new EmployeeMobileLookupResponse(
+                emp.getEmployeeId(),
+                emp.getMobile(),
+                emp.getRole()
+        );
 
         return ApiResponse.ok(resp, "Employee found");
     }

@@ -19,7 +19,7 @@ public class EmployeeClient {
                 .build();
     }
 
-    public Long getEmployeeIdByMobile(String mobile) {
+    public EmployeeMobileLookupResponse getEmployeeByMobile(String mobile) {
 
         ApiResponse<EmployeeMobileLookupResponse> response =
                 webClient.get()
@@ -32,6 +32,6 @@ public class EmployeeClient {
             throw new RuntimeException("Employee lookup failed for mobile: " + mobile);
         }
 
-        return response.data().employeeId();
+        return response.data();
     }
 }

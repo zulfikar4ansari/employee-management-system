@@ -37,16 +37,14 @@ public class JwtTokenService {
     /**
      * Generates JWT access token.
      */
-    public String generateAccessToken(String mobile, Long employeeId) {
-
+    public String generateAccessToken(String mobile, Long employeeId, String role) {
         return Jwts.builder()
-                .setSubject(mobile)                 // Principal
-                .claim("employeeId", employeeId)    // Custom claim
-                .setIssuedAt(new Date())             // Issued time
-                .setExpiration(
-                        new Date(System.currentTimeMillis() + 3600_000)
-                )                                    // 1 hour expiry
-                .signWith(signingKey)                // ✅ CORRECT
+                .setSubject(mobile)
+                .claim("employeeId", employeeId)
+                .claim("role", role) // ✅ NEW
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 3600_000))
+                .signWith(signingKey)
                 .compact();
     }
 

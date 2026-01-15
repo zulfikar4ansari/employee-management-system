@@ -15,7 +15,15 @@ INSERT INTO employees(employee_id, mobile, department, role, shift, payroll_mapp
 VALUES (1003, '9876543213', 'IT', 'Senior Developer', 'GENERAL', 9003)
 ON DUPLICATE KEY UPDATE department=department;
 
+INSERT INTO employees(employee_id, mobile, department, role, shift, payroll_mapping_id)
+VALUES (1, '9000000001', 'IT', 'ADMIN', 'General', 1001);
+
+INSERT INTO employees(employee_id, mobile, department, role, shift, payroll_mapping_id)
+VALUES (103, '9000000002', 'IT', 'EMPLOYEE', 'General', 1003);
+
 select * from employees;
+
+-- delete from employees where employee_id in ('1001','1002','1003');
 
 ---------------------------------------------------------------------------
 USE ems_db;
@@ -70,6 +78,10 @@ ALTER TABLE attendance_records MODIFY qr_date DATE NULL;
 
 USE ems_db;
 select * from employees;
+select * from employee_face;
+
+desc table employee_face;
+
 select * from qt_table; 
 select * from attendance_records;
 

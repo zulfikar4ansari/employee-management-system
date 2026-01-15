@@ -53,18 +53,15 @@ public class AuthController {
             throw new RuntimeException("Invalid OTP");
         }
 
-        // ✅ Call Employee-Service to fetch employeeId
-        Long employeeId = employeeClient.getEmployeeIdByMobile(req.mobile());
+        // ✅ Fetch employee info
+        var emp = employeeClient.getEmployeeByMobile(req.mobile());
 
-        // ✅ JWT with correct employeeId
-        String access = jwtTokenService.generateAccessToken(req.mobile(), employeeId);
+        String access = jwtTokenService.generateAccessToken(req.mobile(), emp.employeeId(), emp.role());
         String refresh = jwtTokenService.generateRefreshToken();
 
-        sessionService.storeSession(jwtTokenService.createSession(req.mobile(), employeeId));
+        sessionService.storeSession(jwtTokenService.createSession(req.mobile(), emp.employeeId()));
 
-        AuthResponse response = new AuthResponse(access, refresh);
-
-        return ApiResponse.ok(response, "Login successful");
+        return ApiResponse.ok(new AuthResponse(access, refresh), "Login successful");
     }
 
 }

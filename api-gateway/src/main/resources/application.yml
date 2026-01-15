@@ -22,6 +22,18 @@ spring:
               predicates:
                 - Path=/auth/**
 
+            # ✅ Admin APIs (Employee-Service)
+            - id: admin-employee-service
+              uri: http://localhost:8082
+              predicates:
+                - Path=/admin/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@rateLimiterKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+
             # ✅ EMPLOYEE SERVICE (Protected + Rate Limit)
             - id: employee-service
               uri: http://localhost:8082

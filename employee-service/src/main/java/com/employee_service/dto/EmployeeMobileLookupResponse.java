@@ -1,4 +1,7 @@
 package com.employee_service.dto;
 
-public record EmployeeMobileLookupResponse(Long employeeId,String mobile) {
-}
+public record EmployeeMobileLookupResponse(
+        Long employeeId,
+        String mobile,
+        String role
+) {}
