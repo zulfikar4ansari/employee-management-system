@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface EmployeeFaceRepository extends JpaRepository<EmployeeFaceEntity, Long> {
     Optional<EmployeeFaceEntity> findByEmployeeId(Long employeeId);
+    void deleteByEmployeeId(Long employeeId);
 }

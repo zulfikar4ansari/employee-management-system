@@ -85,7 +85,7 @@ desc table employee_face;
 select * from qt_table; 
 select * from attendance_records;
 
-delete from attendance_records where employee_mobile ='9876543210';
+delete from attendance_records where employee_mobile in ('9876543210','9000000001');
 
 SELECT * 
 FROM attendance_records 

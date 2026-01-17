@@ -12,26 +12,25 @@ public class EmployeeFaceEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name="employee_id", nullable=false, unique=true)
+    @Column(name="employee_id", nullable = false, unique = true)
     private Long employeeId;
 
     @Lob
-    @Column(name="face_template", nullable=false, columnDefinition = "MEDIUMTEXT")
+    @Column(name="face_template", nullable = false, columnDefinition = "MEDIUMTEXT")
     private String faceTemplate;
 
-    @Column(name="template_version", nullable=false)
+    @Column(name="template_version", nullable = false)
     private String templateVersion;
 
-    @Column(name="template_hash", nullable=false, length=128)
+    @Column(name="template_hash", nullable = false, length = 128)
     private String templateHash;
 
-    @Column(name="created_at", nullable=false)
+    @Column(name="created_at", nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name="updated_at")
     private LocalDateTime updatedAt;
 
-    // getters/setters
     public Long getId() { return id; }
 
     public Long getEmployeeId() { return employeeId; }

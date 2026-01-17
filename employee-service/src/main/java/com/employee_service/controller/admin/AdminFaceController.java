@@ -2,6 +2,7 @@ package com.employee_service.controller.admin;
 
 import com.common_lib.dto.ApiResponse;
 import com.employee_service.dto.face.FaceEnrollRequest;
+import com.employee_service.dto.face.FaceResponse;
 import com.employee_service.security.AdminGuard;
 import com.employee_service.service.face.EmployeeFaceService;
 import jakarta.validation.Valid;
@@ -20,13 +21,31 @@ public class AdminFaceController {
     }
 
     @PostMapping
-    public ApiResponse<String> enroll(
+    public ApiResponse<FaceResponse> enrollOrUpdate(
             @RequestHeader("X-Role") String role,
             @PathVariable Long employeeId,
             @Valid @RequestBody FaceEnrollRequest req
     ) {
         adminGuard.requireAdmin(role);
-        faceService.enroll(employeeId, req);
-        return ApiResponse.ok("OK", "Face template enrolled/updated");
+        return ApiResponse.ok(faceService.enrollOrUpdate(employeeId, req), "Face template saved");
+    }
+
+    @GetMapping
+    public ApiResponse<FaceResponse> get(
+            @RequestHeader("X-Role") String role,
+            @PathVariable Long employeeId
+    ) {
+        adminGuard.requireAdmin(role);
+        return ApiResponse.ok(faceService.get(employeeId), "Face template fetched");
+    }
+
+    @DeleteMapping
+    public ApiResponse<String> delete(
+            @RequestHeader("X-Role") String role,
+            @PathVariable Long employeeId
+    ) {
+        adminGuard.requireAdmin(role);
+        faceService.delete(employeeId);
+        return ApiResponse.ok("Deleted", "Face template removed");
     }
 }

@@ -1,11 +1,12 @@
 package com.employee_service.service.face;
 
 import com.employee_service.dto.face.FaceEnrollRequest;
-import com.employee_service.entity.EmployeeEntity;
+import com.employee_service.dto.face.FaceResponse;
 import com.employee_service.entity.EmployeeFaceEntity;
 import com.employee_service.repository.EmployeeFaceRepository;
 import com.employee_service.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -22,19 +23,21 @@ public class EmployeeFaceService {
         this.employeeRepo = employeeRepo;
     }
 
-    public void enroll(Long employeeId, FaceEnrollRequest req) {
+    @Transactional
+    public FaceResponse enrollOrUpdate(Long employeeId, FaceEnrollRequest req) {
 
-        EmployeeEntity employee = employeeRepo.findById(employeeId)
+        // validate employee exists
+        employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found: " + employeeId));
 
         String hash = sha256(req.faceTemplate());
 
-        EmployeeFaceEntity entity = faceRepo.findByEmployeeId(employee.getEmployeeId())
+        EmployeeFaceEntity entity = faceRepo.findByEmployeeId(employeeId)
                 .orElseGet(EmployeeFaceEntity::new);
 
         boolean isNew = entity.getId() == null;
 
-        entity.setEmployeeId(employee.getEmployeeId());
+        entity.setEmployeeId(employeeId);
         entity.setFaceTemplate(req.faceTemplate());
         entity.setTemplateVersion(req.templateVersion());
         entity.setTemplateHash(hash);
@@ -45,7 +48,33 @@ public class EmployeeFaceService {
             entity.setUpdatedAt(LocalDateTime.now());
         }
 
-        faceRepo.save(entity);
+        EmployeeFaceEntity saved = faceRepo.save(entity);
+
+        return new FaceResponse(
+                saved.getEmployeeId(),
+                saved.getTemplateVersion(),
+                saved.getTemplateHash(),
+                saved.getCreatedAt(),
+                saved.getUpdatedAt()
+        );
+    }
+
+    public FaceResponse get(Long employeeId) {
+        EmployeeFaceEntity e = faceRepo.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new RuntimeException("Face template not found for employeeId=" + employeeId));
+
+        return new FaceResponse(
+                e.getEmployeeId(),
+                e.getTemplateVersion(),
+                e.getTemplateHash(),
+                e.getCreatedAt(),
+                e.getUpdatedAt()
+        );
+    }
+
+    @Transactional
+    public void delete(Long employeeId) {
+        faceRepo.deleteByEmployeeId(employeeId);
     }
 
     private String sha256(String value) {
