@@ -1,6 +1,7 @@
 package com.attendance_service.controller;
 
 import com.attendance_service.dto.AttendanceResponse;
+import com.attendance_service.dto.FaceVerifyRequest;
 import com.attendance_service.dto.QrScanRequest;
 import com.attendance_service.model.AttendanceActionResponse;
 import com.attendance_service.service.AttendanceService;
@@ -46,6 +47,28 @@ public class AttendanceController {
         AttendanceActionResponse res = service.markOut(employeeId, employeeMobile);
         return ApiResponse.ok(res, "OUT marked successfully");
     }
+
+    @PostMapping("/mark-in-face")
+    public ApiResponse<AttendanceActionResponse> markInFace(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader("X-Mobile") String employeeMobile,
+            @RequestBody FaceVerifyRequest request
+    ) {
+        AttendanceActionResponse res = service.markInWithFace(employeeId, employeeMobile, request.embedding());
+        return ApiResponse.ok(res, "IN marked successfully (face verified)");
+    }
+
+    @PostMapping("/mark-out-face")
+    public ApiResponse<AttendanceActionResponse> markOutFace(
+            @RequestHeader("X-Employee-Id") Long employeeId,
+            @RequestHeader("X-Mobile") String employeeMobile,
+            @RequestBody FaceVerifyRequest request
+    ) {
+        AttendanceActionResponse res = service.markOutWithFace(employeeId, employeeMobile, request.embedding());
+        return ApiResponse.ok(res, "OUT marked successfully (face verified)");
+    }
+
+
 
 
 }

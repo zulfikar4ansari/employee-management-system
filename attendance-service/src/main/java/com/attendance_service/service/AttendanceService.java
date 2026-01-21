@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
+
 @Service
 public class AttendanceService {
 
@@ -20,17 +22,20 @@ public class AttendanceService {
     private final QrValidationService qrValidationService;
     private final KafkaPublisher kafkaPublisher;
 
+    private final FaceMatchService faceMatchService;
+
     @Value("${attendance.hr-mobile}")
     private String hrMobile;
 
     public AttendanceService(
             AttendanceRepository attendanceRepo,
             QrValidationService qrValidationService,
-            KafkaPublisher kafkaPublisher
+            KafkaPublisher kafkaPublisher,FaceMatchService faceMatchService
     ) {
         this.attendanceRepo = attendanceRepo;
         this.qrValidationService = qrValidationService;
         this.kafkaPublisher = kafkaPublisher;
+        this.faceMatchService=faceMatchService;
     }
 
     public AttendanceResponse markAttendance(Long empId, String empMobile, String qrCodeValue) {
@@ -170,6 +175,23 @@ public class AttendanceService {
 
         return new AttendanceActionResponse(employeeId, "OUT", today, now, entity.getStatus(), workedMinutes);
     }
+
+    public AttendanceActionResponse markInWithFace(Long employeeId, String employeeMobile, List<Double> embedding) {
+
+        boolean ok = faceMatchService.verify(employeeId, embedding);
+        if (!ok) throw new RuntimeException("Face verification failed. Attendance denied.");
+
+        return markIn(employeeId, employeeMobile); // reuse your existing logic
+    }
+
+    public AttendanceActionResponse markOutWithFace(Long employeeId, String employeeMobile, List<Double> embedding) {
+
+        boolean ok = faceMatchService.verify(employeeId, embedding);
+        if (!ok) throw new RuntimeException("Face verification failed. Attendance denied.");
+
+        return markOut(employeeId, employeeMobile);
+    }
+
 
 
 }
