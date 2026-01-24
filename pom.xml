@@ -49,9 +49,9 @@
 	    <module>employee-service</module>
 		<module>attendance-service</module>
 		<module>notification-service</module>
-	<!--<module>payroll-service</module>
-        <module>audit-service</module>
-        <module>web-portal</module>-->
+	    <module>payroll-service</module>
+		<!--    <module>audit-service</module>
+            <module>web-portal</module>-->
 	</modules>
 
 </project>

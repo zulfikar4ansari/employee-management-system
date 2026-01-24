@@ -76,6 +76,102 @@ ALTER TABLE attendance_records MODIFY qr_date DATE NULL;
 
 -------------------------------------------------------------------------------
 
+-----
+-- Payroll System
+
+CREATE TABLE payroll_config (
+  employee_id BIGINT NOT NULL,
+  gross_salary DECIMAL(10,2) NOT NULL,
+  basic DECIMAL(10,2) NOT NULL,
+  hra DECIMAL(10,2) NOT NULL,
+  special_allowance DECIMAL(10,2) NOT NULL,
+
+  pf_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  pf_percent DECIMAL(5,2) NOT NULL DEFAULT 12.00,
+  esi_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  esi_percent DECIMAL(5,2) NOT NULL DEFAULT 0.75,
+  pt_amount DECIMAL(10,2) NOT NULL DEFAULT 200.00,
+
+  salary_days_mode VARCHAR(30) NOT NULL DEFAULT 'CALENDAR_DAYS',
+
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT NULL,
+
+  PRIMARY KEY(employee_id),
+  CONSTRAINT fk_payroll_emp FOREIGN KEY (employee_id)
+      REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE holiday_calendar (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  holiday_date DATE NOT NULL,
+  holiday_name VARCHAR(100) NOT NULL,
+  is_paid TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  UNIQUE KEY uq_holiday_date (holiday_date)
+);
+
+CREATE TABLE weekly_off_config (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  sunday_off TINYINT(1) NOT NULL DEFAULT 1,
+  saturday_rule VARCHAR(30) NOT NULL DEFAULT 'ALL', 
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id)
+);
+
+INSERT INTO weekly_off_config(sunday_off, saturday_rule)
+VALUES(1, 'ALL');
+
+
+CREATE TABLE payroll_run (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  year INT NOT NULL,
+  month INT NOT NULL,
+  month_days INT NOT NULL,
+  created_by BIGINT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  UNIQUE KEY uq_run (year, month)
+);
+
+CREATE TABLE payroll_slip (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  payroll_run_id BIGINT NOT NULL,
+  employee_id BIGINT NOT NULL,
+
+  present_days INT NOT NULL,
+  weekly_off_days INT NOT NULL,
+  holiday_days INT NOT NULL,
+  absent_days INT NOT NULL,
+
+  per_day_salary DECIMAL(10,2) NOT NULL,
+  absent_deduction DECIMAL(10,2) NOT NULL,
+  payable_gross DECIMAL(10,2) NOT NULL,
+
+  pf_amount DECIMAL(10,2) NOT NULL,
+  esi_amount DECIMAL(10,2) NOT NULL,
+  pt_amount DECIMAL(10,2) NOT NULL,
+
+  net_salary DECIMAL(10,2) NOT NULL,
+
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY(id),
+  UNIQUE KEY uq_run_emp (payroll_run_id, employee_id),
+
+  CONSTRAINT fk_slip_run FOREIGN KEY(payroll_run_id)
+      REFERENCES payroll_run(id) ON DELETE CASCADE,
+
+  CONSTRAINT fk_slip_emp FOREIGN KEY(employee_id)
+      REFERENCES employees(employee_id) ON DELETE CASCADE
+);
+
+
+------------------------------------------------------------------------------
+
+
 USE ems_db;
 select * from employees;
 select * from employee_face;
@@ -94,7 +190,17 @@ WHERE employee_id = 1003 AND attendance_date = CURDATE();
 DELETE FROM attendance_records 
 WHERE employee_id = 1001 AND attendance_date = CURDATE();
 
------
+
+select * from weekly_off_config;
+
+select * from payroll_slip;
+
+
+
+
+
+
+
 
 
 
