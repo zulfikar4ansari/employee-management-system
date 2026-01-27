@@ -191,7 +191,14 @@ DELETE FROM attendance_records
 WHERE employee_id = 1001 AND attendance_date = CURDATE();
 
 
+
+select * from payroll_config;
+
+select * from holiday_calendar;
+
 select * from weekly_off_config;
+
+select * from payroll_run;
 
 select * from payroll_slip;
 
