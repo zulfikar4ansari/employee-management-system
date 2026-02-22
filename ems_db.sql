@@ -76,6 +76,7 @@ ALTER TABLE attendance_records MODIFY qr_date DATE NULL;
 
 -------------------------------------------------------------------------------
 
+
 -----
 -- Payroll System
 
