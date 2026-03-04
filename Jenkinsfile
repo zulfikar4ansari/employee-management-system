@@ -6,19 +6,20 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/zulfikar4ansari/employee-management-system.git'
+                git branch: 'main',
+                url: 'https://github.com/zulfikar4ansari/employee-management-system.git'
             }
         }
 
         stage('Build') {
             steps {
-                sh 'mvn clean package'
+                bat 'mvn clean install'
             }
         }
 
         stage('Test') {
             steps {
-                sh 'mvn test'
+                bat 'mvn test'
             }
         }
 
