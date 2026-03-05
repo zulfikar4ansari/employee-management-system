@@ -88,7 +88,7 @@ pipeline {
 
             steps {
 
-                bat "docker run -d -p 8080:8080 %DOCKER_REGISTRY%/%API_GATEWAY%:%VERSION%"
+                bat "docker run -d -p 9090:9090 %DOCKER_REGISTRY%/%API_GATEWAY%:%VERSION%"
                 bat "docker run -d -p 8081:8081 %DOCKER_REGISTRY%/%AUTH_SERVICE%:%VERSION%"
                 bat "docker run -d -p 8082:8082 %DOCKER_REGISTRY%/%EMPLOYEE_SERVICE%:%VERSION%"
                 bat "docker run -d -p 8083:8083 %DOCKER_REGISTRY%/%ATTENDANCE_SERVICE%:%VERSION%"
